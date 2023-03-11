@@ -126,3 +126,12 @@ func (b *Bot) CallMethod(method string, body, result interface{}) error {
 
 	return nil
 }
+
+func (b *Bot) GetMe() (*User, error) {
+	var user User
+	if err := b.CallMethod("getMe", nil, &user); err != nil {
+		return nil, fmt.Errorf("cannot fetch current user: %w", err)
+	}
+
+	return &user, nil
+}

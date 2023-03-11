@@ -29,9 +29,9 @@ func main() {
 func cmdBotInfo(p *program.Program) {
 	bot := createBot(p)
 
-	var user telegrambot.User
-	if err := bot.CallMethod("getMe", nil, &user); err != nil {
-		p.Fatal("cannot fetch user information: %v", err)
+	user, err := bot.GetMe()
+	if err != nil {
+		p.Fatal("%v", err)
 	}
 
 	t := NewTable()
