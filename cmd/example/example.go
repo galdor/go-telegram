@@ -8,38 +8,64 @@ import (
 
 	"github.com/exograd/go-program"
 	"github.com/galdor/go-netrc"
-	"github.com/galdor/go-telegram/pkg/bot"
+	telegrambot "github.com/galdor/go-telegram/pkg/bot"
+)
+
+const (
+	DefaultUsername = "go_telegram_example_bot"
 )
 
 func main() {
 	p := program.NewProgram("example",
 		"an example program for the go-telegram library")
 
-	p.AddArgument("username", "the telegram username of the bot")
-
-	p.SetMain(exampleMain)
+	p.AddCommand("bot-info", "print information about the bot user",
+		cmdBotInfo)
 
 	p.ParseCommandLine()
 	p.Run()
 }
 
-func exampleMain(p *program.Program) {
-	username := p.ArgumentValue("username")
+func cmdBotInfo(p *program.Program) {
+	bot := createBot(p)
 
-	token, err := netrcLookup("api.telegram.org", username)
+	var user telegrambot.User
+	if err := bot.CallMethod("getMe", nil, &user); err != nil {
+		p.Fatal("cannot fetch user information: %v", err)
+	}
+
+	t := NewTable()
+
+	t.AddRow("Id", user.Id)
+	t.AddRow("Bot", user.IsBot)
+	t.AddRow("Premium", user.IsPremium)
+	t.AddRow("First name", user.FirstName)
+	t.AddRow("Last name", user.LastName)
+	t.AddRow("Username", user.Username)
+	t.AddRow("Language code", user.LanguageCode)
+
+	t.Write()
+}
+
+func createBot(p *program.Program) *telegrambot.Bot {
+	token, err := netrcLookup("api.telegram.org", DefaultUsername)
 	if err != nil {
 		p.Fatal("cannot lookup token in netrc: %v", err)
 	}
 
-	botCfg := bot.BotCfg{
+	botCfg := telegrambot.BotCfg{
 		Token: token,
 	}
 
-	bot, err := bot.NewBot(botCfg)
+	bot, err := telegrambot.NewBot(botCfg)
 	if err != nil {
 		p.Fatal("cannot create bot: %v", err)
 	}
 
+	return bot
+}
+
+func runBot(p *program.Program, bot *telegrambot.Bot) {
 	if err := bot.Start(); err != nil {
 		p.Fatal("cannot start bot: %v", err)
 	}

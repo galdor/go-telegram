@@ -1,9 +1,13 @@
 package bot
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
+	"path"
 	"sync"
 )
 
@@ -77,4 +81,48 @@ func (b *Bot) main() {
 			return
 		}
 	}
+}
+
+func (b *Bot) MethodURI(method string) *url.URL {
+	base := *b.endpointURI
+
+	ref := url.URL{
+		Path: path.Join("bot"+b.Cfg.Token, method),
+	}
+
+	return base.ResolveReference(&ref)
+}
+
+func (b *Bot) CallMethod(method string, body, result interface{}) error {
+	bodyData, err := json.Marshal(body)
+	if err != nil {
+		return fmt.Errorf("cannot encode body data: %w", err)
+	}
+
+	uri := b.MethodURI(method)
+
+	req, err := http.NewRequest("POST", uri.String(),
+		bytes.NewReader(bodyData))
+	if err != nil {
+		return fmt.Errorf("cannot create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+
+	res, err := b.Cfg.HTTPClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("cannot send request: %w", err)
+	}
+	defer res.Body.Close()
+
+	data, err := ioutil.ReadAll(res.Body)
+	if err != nil {
+		return fmt.Errorf("cannot read response body: %w", err)
+	}
+
+	if err := DecodeResponse(data, result); err != nil {
+		return err
+	}
+
+	return nil
 }
