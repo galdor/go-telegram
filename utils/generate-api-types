@@ -33,28 +33,50 @@ class Scrapper
 
       type_name = title.text()
       next unless type_name.match /^[A-Za-z]+$/
-      next unless type_name[0] >= 'A' && type_name[0] <= 'Z'
+      method_type = type_name[0] >= 'a' && type_name[0] <= 'z'
+      if method_type
+        method_name = type_name
+        type_name = type_name.sub(/\S/, &:upcase) + "Parameters"
+      end
 
       description = description_paragraph.text()
+      if method_type
+        description = "#{type_name} is the set of parameters for the "+
+                      "#{method_name} method.\n// "+description
+      end
 
       fields = []
 
       if table
         table.css("tbody > tr").each do |row|
           cells = row.css("td")
-          if cells.length != 3
-            raise "type row #{row} does not have three cells"
+
+          nb_cells = method_type ? 4 : 3
+          if cells.length != nb_cells
+            raise "type row #{row.inspect()} does not have #{nb_cells} cells"
           end
 
           field_name = cells[0].text()
           field_type = cells[1].text()
-          field_description = cells[2].text()
 
-          optional = cells[2].at_css("em")&.text() == "Optional"
+          field_description = nil
+          if method_type
+            field_description = cells[3].text()
+          else
+            field_description = cells[2].text()
+          end
+
+          optional = nil
+          if method_type
+            optional = cells[2].text() == "Optional"
+          else
+            optional = cells[2].at_css("em")&.text() == "Optional"
+          end
 
           fields << {
             name: field_name,
             type: field_type,
+            method_type: method_type,
             optional: optional,
             description: field_description,
           }
@@ -90,20 +112,13 @@ class Scrapper
 
       type[:fields].each() do |field|
         name = snake_case_to_pascal_case(field[:name])
-        type = go_type(field[:type], field[:name])
+        type = go_type(field[:type], field)
 
         json_tag = field[:name]
         json_tag += ",omitempty" if field[:optional]
 
-        buf << name
-        buf << " "
-        if type
-          buf << type
-        else
-          buf << "json.RawMessage"
-        end
-        buf << " `json:\"#{json_tag}\"`"
-        if !type
+        buf << "#{name} #{type} `json:\"#{json_tag}\"`"
+        if type == "interface{}" || type == "json.RawMessage"
           buf << " // "
           buf << field[:type]
         end
@@ -133,14 +148,14 @@ class Scrapper
     end.join
   end
 
-  def go_type(type_string, field_name)
+  def go_type(type_string, field)
     case type_string
     when "String"
       "string"
     when "Boolean", "True"
       "bool"
     when "Integer"
-      if field_name == "id" || field_name.match(/_id$/)
+      if field[:name] == "id" || field[:name].match(/_id$/)
         "int64"
       else
         "int"
@@ -148,13 +163,19 @@ class Scrapper
     when "Float", "Float number"
       "float64"
     when /^Array of (.*)$/
-      "[]" + go_type($1, field_name)
+      "[]" + go_type($1, field)
     when "Integer or String"
       "Integer"
-    when /^([^ ]+) or ([^ ]+)$/
-      nil
     when /^[A-Za-z]+$/
       "*"+type_string
+    when /^[^ ]+(?: or [^ ]+)+$/, /^[^ ]+(?:, [^ ]+)*(?: and [^ ]+)$/
+      if field[:method_type]
+        # In method request objects, we want to be able to easily pass a value
+        # of any type and let the JSON encoder serialize it correctly.
+        "interface{}"
+      else
+        "json.RawMessage"
+      end
     else
       raise "invalid type \"#{type_string}\""
     end
