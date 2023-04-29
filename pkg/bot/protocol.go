@@ -7,17 +7,34 @@ import (
 	"strconv"
 )
 
+type Integer int64
+
+func (i Integer) MarshalJSON() ([]byte, error) {
+	return json.Marshal(strconv.FormatInt(int64(i), 10))
+}
+
+func (i *Integer) UnmarshalJSON(data []byte) error {
+	var value json.Number
+
+	if err := json.Unmarshal(data, &value); err != nil {
+		return err
+	}
+
+	i64, err := value.Int64()
+	if err != nil {
+		return err
+	}
+
+	*i = Integer(i64)
+	return nil
+}
+
 type Response struct {
 	Ok          bool               `json:"ok"`
 	Description string             `json:"description"`
 	Result      json.RawMessage    `json:"result"`
 	ErrorCode   int                `json:"error_code"`
 	Parameters  ResponseParameters `json:"parameters"`
-}
-
-type ResponseParameters struct {
-	MigrateToChatId int `json:"migrate_to_chat_id"`
-	RetryAfter      int `json:"retry_after"` // seconds
 }
 
 type MethodError struct {
@@ -63,18 +80,4 @@ func DecodeResponse(data []byte, result interface{}) error {
 	}
 
 	return nil
-}
-
-type User struct {
-	Id                      int64  `json:"id"`
-	IsBot                   bool   `json:"is_bot"`
-	FirstName               string `json:"first_name"`
-	LastName                string `json:"last_name,omitempty"`
-	Username                string `json:"username,omitempty"`
-	LanguageCode            string `json:"language_code"`
-	IsPremium               bool   `json:"is_premium,omitempty"`
-	AddedToAttachmentMenu   bool   `json:"added_to_attachment_menu,omitempty"`
-	CanJoinGroups           bool   `json:"can_join_groups,omitempty"`
-	CanReadAllGroupMessages bool   `json:"can_read_all_group_messages,omitempty"`
-	SupportsInlineQueries   bool   `json:"supports_inline_queries,omitempty"`
 }

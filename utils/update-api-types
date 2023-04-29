@@ -1,0 +1,11 @@
+#!/bin/sh
+
+set -eu
+
+root=$(realpath $(dirname $0)/..)
+cd $root
+
+type_file_path=./pkg/bot/types.go
+
+mkdir -p $(dirname $type_file_path)
+./utils/generate-api-types >$type_file_path
